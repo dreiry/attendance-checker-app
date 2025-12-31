@@ -2,11 +2,11 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { createClient } from "@/lib/supabase/client" // Note: Changed to client import
+import { createClient } from "@/lib/supabase/client"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { PlusCircle, QrCode, Users, FileDown, LayoutDashboard, Loader2 } from "lucide-react"
+import { PlusCircle, QrCode, Users, FileDown, LayoutDashboard, Loader2, Eye } from "lucide-react"
 import Link from "next/link"
 import { toast } from "sonner"
 import * as XLSX from "xlsx"
@@ -29,14 +29,12 @@ export default function TeacherDashboard() {
           return
         }
 
-        // Verify Teacher Role
         const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single()
         if (profile?.role !== "teacher") {
           router.push("/dashboard/student")
           return
         }
 
-        // Fetch Classes
         const { data: classData, error } = await supabase
           .from("classes")
           .select("*, attendance_sessions(count)")
@@ -56,19 +54,17 @@ export default function TeacherDashboard() {
     fetchData()
   }, [router, supabase])
 
-  // --- THE EXCEL EXPORT FUNCTION ---
+  // --- EXCEL EXPORT FUNCTION ---
   const handleExportReport = async (classId: string, className: string) => {
     try {
       setExportingId(classId)
       toast.loading("Generating Excel Report...", { id: "export-toast" })
 
-      // 1. Fetch Students (Enrollments)
       const { data: enrollments } = await supabase
         .from("enrollments")
         .select("student:profiles(id, full_name, email)")
         .eq("class_id", classId)
       
-      // 2. Fetch Sessions
       const { data: sessions } = await supabase
         .from("attendance_sessions")
         .select("id, session_date")
@@ -76,23 +72,20 @@ export default function TeacherDashboard() {
         .order("session_date", { ascending: true })
 
       if (!enrollments || !sessions || sessions.length === 0) {
-        toast.error("No attendance data found for this class.", { id: "export-toast" })
+        toast.error("No data found to export.", { id: "export-toast" })
         setExportingId(null)
         return
       }
 
-      // 3. Fetch Logs
       const { data: logs } = await supabase
         .from("attendance_logs")
         .select("student_id, session_id, status")
         .in("session_id", sessions.map(s => s.id))
 
-      // 4. Sort Students A-Z
       const sortedStudents = enrollments
         .map((e: any) => e.student)
         .sort((a: any, b: any) => a.full_name.localeCompare(b.full_name))
 
-      // 5. Build Excel Data Rows
       const reportData = sortedStudents.map((student: any) => {
         const row: any = {
           "Student Name": student.full_name,
@@ -120,10 +113,7 @@ export default function TeacherDashboard() {
         return row
       })
 
-      // 6. Generate & Download File
       const worksheet = XLSX.utils.json_to_sheet(reportData)
-      
-      // Auto-width columns roughly
       const wscols = Object.keys(reportData[0] || {}).map(() => ({ wch: 15 }))
       worksheet['!cols'] = wscols
 
@@ -134,7 +124,6 @@ export default function TeacherDashboard() {
       const dataBlob = new Blob([excelBuffer], { type: "application/octet-stream" })
       
       saveAs(dataBlob, `${className}_Attendance_Report.xlsx`)
-
       toast.success("Download Complete!", { id: "export-toast" })
 
     } catch (error) {
@@ -163,7 +152,7 @@ export default function TeacherDashboard() {
           </div>
           <div>
             <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-slate-900">Teacher Dashboard</h1>
-            <p className="text-slate-500">Manage classes & export reports.</p>
+            <p className="text-slate-500">Manage classes & track attendance.</p>
           </div>
         </div>
         <Button size="lg" className="shadow-blue-200 shadow-lg bg-blue-600 hover:bg-blue-700" asChild>
@@ -215,20 +204,29 @@ export default function TeacherDashboard() {
                     </TableCell>
                     <TableCell>{cls.attendance_sessions?.[0]?.count || 0}</TableCell>
                     <TableCell className="text-right">
-                      <div className="flex flex-col sm:flex-row justify-end gap-2">
-                        {/* Link to QR Generation Page */}
-                        <Button variant="outline" size="sm" className="w-full sm:w-auto text-blue-600 border-blue-200 hover:bg-blue-50" asChild>
+                      <div className="flex flex-col lg:flex-row justify-end gap-2">
+                        
+                        {/* 1. Generate QR Button */}
+                        <Button variant="outline" size="sm" className="w-full lg:w-auto text-blue-600 border-blue-200 hover:bg-blue-50" asChild>
                           <Link href={`/dashboard/teacher/classes/${cls.id}/qr`}>
                             <QrCode className="mr-2 h-4 w-4" />
                             QR Code
                           </Link>
                         </Button>
+
+                        {/* 2. View Report Button (NEW) */}
+                        <Button variant="outline" size="sm" className="w-full lg:w-auto" asChild>
+                          <Link href={`/dashboard/teacher/classes/${cls.id}/report`}>
+                            <Eye className="mr-2 h-4 w-4" />
+                            View
+                          </Link>
+                        </Button>
                         
-                        {/* Direct Export Button */}
+                        {/* 3. Download Excel Button */}
                         <Button 
                           variant="default" 
                           size="sm" 
-                          className="w-full sm:w-auto bg-green-600 hover:bg-green-700 text-white"
+                          className="w-full lg:w-auto bg-green-600 hover:bg-green-700 text-white"
                           onClick={() => handleExportReport(cls.id, cls.name)}
                           disabled={exportingId === cls.id}
                         >
@@ -237,8 +235,9 @@ export default function TeacherDashboard() {
                           ) : (
                             <FileDown className="mr-2 h-4 w-4" />
                           )}
-                          Download Report
+                          Download
                         </Button>
+
                       </div>
                     </TableCell>
                   </TableRow>
