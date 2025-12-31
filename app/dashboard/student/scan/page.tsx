@@ -24,11 +24,9 @@ export default function ScanPage() {
 
     const initScanner = async () => {
       try {
-        // 1. Import the library
         const { Html5QrcodeScanner } = await import("html5-qrcode")
         if (!mountedRef.current) return
 
-        // 2. Initialize the scanner immediately (The div is now always there)
         const scanner = new Html5QrcodeScanner(
           "reader",
           { 
@@ -41,17 +39,17 @@ export default function ScanPage() {
 
         scannerRef.current = scanner
 
-        // 3. Render (Start Camera)
         scanner.render(onScanSuccess, (errorMessage: any) => {
-          // parse error, ignore it.
+          // ignore scan failures
         })
         
-        // If we reached here, permission was likely granted or requested
-        setPermissionGranted(true)
+        // Assume permission is interacting if we rendered successfully
+        // We set a small timeout to ensure the user has time to click "Allow"
+        setTimeout(() => setPermissionGranted(true), 500)
 
       } catch (error) {
         console.error("Failed to load scanner", error)
-        setErrorMessage("Camera failed to start. Please check permissions.")
+        setErrorMessage("Camera failed to start.")
         setScanStatus("error")
       }
     }
@@ -60,7 +58,6 @@ export default function ScanPage() {
       if (scanStatus !== "idle") return
 
       try {
-        // Clear scanner UI immediately to stop using camera resources
         if (scannerRef.current) {
           scannerRef.current.clear()
         }
@@ -78,7 +75,6 @@ export default function ScanPage() {
         const { data: { user } } = await supabase.auth.getUser()
         if (!user) throw new Error("Please log in first.")
 
-        // Verify Session
         const { data: session, error: sessionError } = await supabase
           .from("attendance_sessions")
           .select("id")
@@ -87,7 +83,6 @@ export default function ScanPage() {
 
         if (sessionError || !session) throw new Error("Invalid or Expired QR Code")
 
-        // Mark Attendance
         const { error: logError } = await supabase.from("attendance_logs").insert({
           session_id: session.id,
           student_id: user.id,
@@ -133,7 +128,6 @@ export default function ScanPage() {
         </CardHeader>
         <CardContent className="space-y-6 pt-6">
           
-          {/* SUCCESS STATE */}
           {scanStatus === "success" && (
             <div className="flex flex-col items-center justify-center py-8 animate-in zoom-in duration-300">
               <div className="h-20 w-20 bg-green-100 rounded-full flex items-center justify-center mb-4">
@@ -144,7 +138,6 @@ export default function ScanPage() {
             </div>
           )}
 
-          {/* ERROR STATE */}
           {scanStatus === "error" && (
             <div className="flex flex-col items-center justify-center py-8 animate-in zoom-in duration-300">
               <div className="h-20 w-20 bg-red-100 rounded-full flex items-center justify-center mb-4">
@@ -158,7 +151,6 @@ export default function ScanPage() {
             </div>
           )}
 
-          {/* PROCESSING STATE */}
           {scanStatus === "processing" && (
              <div className="h-[300px] flex flex-col items-center justify-center space-y-4">
                 <Loader2 className="h-12 w-12 animate-spin text-blue-600" />
@@ -166,22 +158,16 @@ export default function ScanPage() {
              </div>
           )}
 
-          {/* CAMERA STATE (IDLE) */}
           <div className={scanStatus !== "idle" ? "hidden" : "block"}>
-            {/* CRITICAL FIX: 
-               The 'reader' div is ALWAYS rendered here. 
-               We just overlay the loader on top of it if permission isn't granted yet.
-            */}
-            
-            <div className="relative rounded-xl overflow-hidden border-2 border-slate-200 bg-black min-h-[300px]">
-                {/* The Scanner Library injects the video here */}
+            {/* Added 'text-white' to force library text to be readable */}
+            <div className="relative rounded-xl overflow-hidden border-2 border-slate-200 bg-black min-h-[300px] text-white">
+                
                 <div id="reader"></div> 
 
-                {/* Loading overlay while camera warms up */}
                 {!permissionGranted && (
-                    <div className="absolute inset-0 flex items-center justify-center bg-slate-100 z-10">
-                        <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
-                        <span className="ml-2 text-slate-500">Starting Camera...</span>
+                    <div className="absolute inset-0 flex items-center justify-center bg-black z-20">
+                        <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+                        <span className="ml-2 text-white font-medium">Requesting Camera...</span>
                     </div>
                 )}
             </div>
