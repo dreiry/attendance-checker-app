@@ -55,28 +55,60 @@ export default function TeacherDashboard() {
     fetchData()
   }, [router, supabase])
 
-  // --- DELETE CLASS FUNCTION ---
+  // --- DELETE CLASS FUNCTION (FIXED) ---
   const handleDeleteClass = async (classId: string) => {
-    if (!confirm("Are you sure you want to delete this class? This will delete all student records and attendance logs associated with it.")) {
+    if (!confirm("Are you sure? This will PERMANENTLY delete the class, all student enrollments, and all attendance records.")) {
       return
     }
 
     setDeletingId(classId)
     try {
-      const { error } = await supabase
+      // 1. Get all session IDs for this class
+      const { data: sessions } = await supabase
+        .from("attendance_sessions")
+        .select("id")
+        .eq("class_id", classId)
+      
+      const sessionIds = sessions?.map(s => s.id) || []
+
+      // 2. Delete all Attendance Logs for those sessions
+      if (sessionIds.length > 0) {
+        const { error: logsError } = await supabase
+          .from("attendance_logs")
+          .delete()
+          .in("session_id", sessionIds)
+        if (logsError) throw logsError
+      }
+
+      // 3. Delete all Sessions for this class
+      const { error: sessionsError } = await supabase
+        .from("attendance_sessions")
+        .delete()
+        .eq("class_id", classId)
+      if (sessionsError) throw sessionsError
+
+      // 4. Delete all Enrollments (Students)
+      const { error: enrollmentsError } = await supabase
+        .from("enrollments")
+        .delete()
+        .eq("class_id", classId)
+      if (enrollmentsError) throw enrollmentsError
+
+      // 5. FINALLY, Delete the Class
+      const { error: classError } = await supabase
         .from("classes")
         .delete()
         .eq("id", classId)
+      
+      if (classError) throw classError
 
-      if (error) throw error
-
-      // Update UI immediately without reloading
+      // Success! Update UI
       setClasses(classes.filter(c => c.id !== classId))
-      toast.success("Class deleted successfully")
+      toast.success("Class and all records deleted")
 
-    } catch (error) {
+    } catch (error: any) {
       console.error("Delete failed", error)
-      toast.error("Failed to delete class")
+      toast.error(error.message || "Failed to delete class")
     } finally {
       setDeletingId(null)
     }
@@ -266,7 +298,7 @@ export default function TeacherDashboard() {
                           Excel
                         </Button>
 
-                        {/* 4. DELETE BUTTON (NEW) */}
+                        {/* 4. DELETE BUTTON */}
                         <Button 
                           variant="ghost" 
                           size="sm" 
