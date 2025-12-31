@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/client"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { PlusCircle, QrCode, Users, FileDown, LayoutDashboard, Loader2, Eye } from "lucide-react"
+import { PlusCircle, QrCode, Users, FileDown, LayoutDashboard, Loader2, Eye, Trash2 } from "lucide-react"
 import Link from "next/link"
 import { toast } from "sonner"
 import * as XLSX from "xlsx"
@@ -19,6 +19,7 @@ export default function TeacherDashboard() {
   const [classes, setClasses] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [exportingId, setExportingId] = useState<string | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
 
   useEffect(() => {
     const fetchData = async () => {
@@ -53,6 +54,33 @@ export default function TeacherDashboard() {
 
     fetchData()
   }, [router, supabase])
+
+  // --- DELETE CLASS FUNCTION ---
+  const handleDeleteClass = async (classId: string) => {
+    if (!confirm("Are you sure you want to delete this class? This will delete all student records and attendance logs associated with it.")) {
+      return
+    }
+
+    setDeletingId(classId)
+    try {
+      const { error } = await supabase
+        .from("classes")
+        .delete()
+        .eq("id", classId)
+
+      if (error) throw error
+
+      // Update UI immediately without reloading
+      setClasses(classes.filter(c => c.id !== classId))
+      toast.success("Class deleted successfully")
+
+    } catch (error) {
+      console.error("Delete failed", error)
+      toast.error("Failed to delete class")
+    } finally {
+      setDeletingId(null)
+    }
+  }
 
   // --- EXCEL EXPORT FUNCTION ---
   const handleExportReport = async (classId: string, className: string) => {
@@ -204,29 +232,29 @@ export default function TeacherDashboard() {
                     </TableCell>
                     <TableCell>{cls.attendance_sessions?.[0]?.count || 0}</TableCell>
                     <TableCell className="text-right">
-                      <div className="flex flex-col lg:flex-row justify-end gap-2">
+                      <div className="flex flex-col xl:flex-row justify-end gap-2">
                         
-                        {/* 1. Generate QR Button */}
-                        <Button variant="outline" size="sm" className="w-full lg:w-auto text-blue-600 border-blue-200 hover:bg-blue-50" asChild>
+                        {/* 1. Generate QR */}
+                        <Button variant="outline" size="sm" className="w-full xl:w-auto text-blue-600 border-blue-200 hover:bg-blue-50" asChild>
                           <Link href={`/dashboard/teacher/classes/${cls.id}/qr`}>
                             <QrCode className="mr-2 h-4 w-4" />
-                            QR Code
+                            QR
                           </Link>
                         </Button>
 
-                        {/* 2. View Report Button (NEW) */}
-                        <Button variant="outline" size="sm" className="w-full lg:w-auto" asChild>
+                        {/* 2. View Report */}
+                        <Button variant="outline" size="sm" className="w-full xl:w-auto" asChild>
                           <Link href={`/dashboard/teacher/classes/${cls.id}/report`}>
                             <Eye className="mr-2 h-4 w-4" />
                             View
                           </Link>
                         </Button>
                         
-                        {/* 3. Download Excel Button */}
+                        {/* 3. Download Excel */}
                         <Button 
                           variant="default" 
                           size="sm" 
-                          className="w-full lg:w-auto bg-green-600 hover:bg-green-700 text-white"
+                          className="w-full xl:w-auto bg-green-600 hover:bg-green-700 text-white"
                           onClick={() => handleExportReport(cls.id, cls.name)}
                           disabled={exportingId === cls.id}
                         >
@@ -235,7 +263,22 @@ export default function TeacherDashboard() {
                           ) : (
                             <FileDown className="mr-2 h-4 w-4" />
                           )}
-                          Download
+                          Excel
+                        </Button>
+
+                        {/* 4. DELETE BUTTON (NEW) */}
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          className="w-full xl:w-auto text-red-500 hover:text-red-700 hover:bg-red-50"
+                          onClick={() => handleDeleteClass(cls.id)}
+                          disabled={deletingId === cls.id}
+                        >
+                          {deletingId === cls.id ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Trash2 className="h-4 w-4" />
+                          )}
                         </Button>
 
                       </div>
